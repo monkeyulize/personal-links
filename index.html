@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+
+<html lang="en">
+	<head>
+		<script src="https://code.jquery.com/jquery-2.2.1.min.js"></script>
+		<script src="https://code.jquery.com/ui/1.11.4/jquery-ui.min.js"></script>
+		<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+		<script src="jquery.collapse.js"></script>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta charset="UTF-8">
+		<link rel="stylesheet" type="text/css" href="style.css">
+		<title>Personal Links</title>
+	</head>
+
+	<body>
+		<div class="container">
+			<h1>Personal Links</h1>
+			<p class="message" hidden></p>
+			<ul id="links">
+
+			</ul>
+			<input type="text" id="newLinkName" placeholder="Link Name">
+			<input type="text" id="newLinkURL" placeholder="Link URL">
+			
+			
+			<div id="dbLogin">
+				<button id="addBtn">+</button>
+				<div>
+					<form>
+						<input type="text" id="dbUser" placeholder="Database Username">
+						<input type="password" id="dbPass" placeholder="Database Password">
+					</form>
+				</div>
+			</div>
+			<p id="debug"></p>
+			<button id="saveOrder">Save Current Ordering</button>
+			<br/>
+			<label for="orderSelect">Select order</label>
+			<select id="orderSelect">
+				<option value="chronological">Chronological</option>
+				<option value="alphabetical">Alphabetical</option>
+				<option value="custom">Custom</option>
+			</select>
+
+		</div>
+		
+		<script>
+		var links;
+		$("#links").sortable();
+		getLinks();
+		$("#saveOrder").click(function() {
+			if(checkUser()) {
+				var sortedIDs = $("#links").sortable("toArray", {attribute: "order"});
+				var sortedIDs_length = sortedIDs.length;
+				var orderingPairs = {};
+				for(var i = 0; i < sortedIDs_length; i++) {
+					orderingPairs[links[sortedIDs[i]].ID] = i;
+				};
+				// links.sort(function(a, b){return a.position - b.position});
+				
+				updateOrdering(orderingPairs, getUser());
+				toggleMessage();
+			} else {
+				toggleMessage("Enter a username/password");
+			}
+
+
+		})
+
+		$("#addBtn").click(function() {
+			var linkname = $("#newLinkName").val();
+			var linkurl = $("#newLinkURL").val();
+
+			
+			if(checkUser()) {
+				if(!linkname || !linkurl) {
+					toggleMessage("Enter a link name and link url");
+				} else {
+					addLink(linkname, linkurl, getUser());
+					$("#newLinkName").val('');
+					$("#newLinkURL").val('');	
+					toggleMessage();					
+				}
+
+			
+			} else {
+				toggleMessage("Enter a username/password");
+			}
+
+
+		});
+		$("#orderSelect").change(function() {
+
+			addLinksToPage(links, this.value);
+
+
+
+			
+		})
+		$("body").on('click', '#removeBtn', function() {
+			if(checkUser()) {
+				
+				var id = $($(this).siblings('.idField')[0]).html();
+				removeLink(id, getUser());
+				toggleMessage();
+			} else {
+				toggleMessage("Enter a username/password");
+			}
+			
+		});
+
+
+
+		function getLinks() {
+
+			var result;
+			$.ajax({
+				type: 'POST',
+				url: "db.php",
+				data: {action: 'query'},
+				success: function(result) {
+					console.log(result);
+					result = JSON.parse(result);
+					links = JSON.parse(result.data);
+					addLinksToPage(links);					
+				}
+			});
+
+
+		}
+		function addLinksToPage(_links, order) {
+			$("#links").empty();
+			switch($("#orderSelect").val()) {
+				case 'chronological':
+					_links.sort(function(a, b){return Number(a.ID) - Number(b.ID)});
+					break;
+				case 'alphabetical':
+					_links.sort(function(a, b){return a.linkname.localeCompare(b.linkname)});
+					break;
+				case 'custom':
+					_links.sort(function(a, b){return Number(a.position) - Number(b.position)});
+					break;
+			}
+			
+			var arrayLength = _links.length;
+			for(var i = 0; i < arrayLength; i++) {
+				$("#links").append(
+					$('<li order=' + i + '>')
+						.append(
+							$('<button>').attr({'id':'removeBtn'}).append('-'))
+						.append(
+							$('<div>').attr('class', 'idField').append(_links[i].ID))
+						.append(
+							$('<a>').attr({'href': _links[i].linkurl, 'target': '_blank'}).append(_links[i].linkname)
+				));
+			}			
+		}
+		function removeLink(id, userObj) {
+			console.log(id);
+			$.ajax({
+				type: 'POST',
+				url: "db.php",
+				data: {action: 'delete', id: id, user: userObj},
+				success: function(result) {
+					$("#debug").html(result);
+					console.log(result);
+					getLinks();
+				}
+			});
+		}
+		function updateOrdering(pairs, userObj) {
+			$.ajax({
+				type: 'POST',
+				url: 'db.php',
+				data: {action: 'update', 
+					   orderingPairs: JSON.stringify(pairs),
+					   user: userObj},
+				success: function(result) {
+					console.log(result);
+					getLinks();
+				}
+			})			
+		}
+		function addLink(linkname, linkurl, userObj) {
+			$.ajax({
+				type: 'POST',
+				url: "db.php",
+				data: {action: 'insert', linkName: linkname, linkURL: linkurl, user: userObj},
+				success: function(result) {
+					$("#debug").html(result);
+					console.log(result);
+					getLinks();
+				}
+			});			
+		}
+		function getUser() {
+			var dbuser = $("#dbUser").val();
+			var dbpass = $("#dbPass").val();
+			return {dbuser: dbuser, dbpass: dbpass};
+		}
+		function checkUser() {
+			if(!$("#dbUser").val() || !$("#dbPass").val()) {
+				return false;
+			} else {
+				return true;
+			}		
+
+		}
+		function toggleMessage(message) {
+			if($(".message").is(":visible") || !message) {
+				$(".message").hide();
+			} else {
+				$(".message").html(message);
+				$(".message").show();	
+			}
+			
+		}
+
+		</script>
+		
+
+
+
+
+	</body>
+
+</html>
