@@ -45,9 +45,21 @@
 		</div>
 		
 		<script>
+		
+		$(function() { // preliminary tasks
+
+			var ordering = localStorage.getItem("orderPref") ? localStorage.getItem("orderPref") : "chronological";
+			$("#orderSelect").val(ordering);
+			getLinks(false, function() {
+				addLinksToPage(links, ordering);
+			});
+			
+
+		});
+
 		var links;
 		$("#links").sortable();
-		getLinks();
+		
 		$("#saveOrder").click(function() {
 			if(checkUser()) {
 				var sortedIDs = $("#links").sortable("toArray", {attribute: "order"});
@@ -92,6 +104,7 @@
 		$("#orderSelect").change(function() {
 
 			addLinksToPage(links, this.value);
+			localStorage.setItem("orderPref", this.value);
 
 
 
@@ -111,18 +124,20 @@
 
 
 
-		function getLinks() {
-
+		function getLinks(doAddLinks, callback) {
 			var result;
 			$.ajax({
 				type: 'POST',
 				url: "db.php",
 				data: {action: 'query'},
 				success: function(result) {
-					console.log(result);
 					result = JSON.parse(result);
 					links = JSON.parse(result.data);
-					addLinksToPage(links);					
+					if(doAddLinks === true) {
+						addLinksToPage(links);	
+					}
+					if(callback) callback();
+									
 				}
 			});
 
@@ -130,7 +145,10 @@
 		}
 		function addLinksToPage(_links, order) {
 			$("#links").empty();
-			switch($("#orderSelect").val()) {
+			var orderToUse = order ? order : $("#orderSelect").val();
+
+
+			switch(orderToUse) {
 				case 'chronological':
 					_links.sort(function(a, b){return Number(a.ID) - Number(b.ID)});
 					break;
@@ -164,7 +182,7 @@
 				success: function(result) {
 					$("#debug").html(result);
 					console.log(result);
-					getLinks();
+					getLinks(true);
 				}
 			});
 		}
@@ -177,7 +195,7 @@
 					   user: userObj},
 				success: function(result) {
 					console.log(result);
-					getLinks();
+					getLinks(true);
 				}
 			})			
 		}
@@ -189,7 +207,7 @@
 				success: function(result) {
 					$("#debug").html(result);
 					console.log(result);
-					getLinks();
+					getLinks(true);
 				}
 			});			
 		}
